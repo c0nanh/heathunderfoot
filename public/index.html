@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5">
+<title>Heath Underfoot</title>
+<meta name="description" content="A walking guide to Hampstead Heath, with your position on the map.">
+<meta name="theme-color" content="#EBEEE5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Heath">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@400;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --ground:#EBEEE5;--surface:#F7F8F3;--surface-2:#E1E6D9;
+  --ink:#1B211A;--ink-2:#3D473B;--muted:#616B5C;
+  --rule:#C6CDBB;--rule-soft:#D8DDCF;
+  --iron:#7C3D18;--iron-tint:#EDDFD3;--water:#1F4744;--live:#1268C3;
+  --serif:"Newsreader",Georgia,serif;
+  --label:"Archivo Narrow","Arial Narrow",Helvetica,Arial,sans-serif;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#12150F;--surface:#191D15;--surface-2:#222719;
+    --ink:#E7EBDF;--ink-2:#C2CAB7;--muted:#939C8B;
+    --rule:#333A2B;--rule-soft:#272D21;
+    --iron:#D89154;--iron-tint:#2C2318;--water:#79B3A9;--live:#5AA9F5;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overscroll-behavior:none}
+body{
+  background:var(--ground);color:var(--ink);font-family:var(--serif);
+  display:flex;flex-direction:column;font-size:16px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit}
+
+/* ---- top bar ---- */
+.bar{
+  flex:0 0 auto;padding:calc(var(--safe-t) + 9px) 12px 9px;
+  background:var(--surface);border-bottom:1px solid var(--rule);
+  display:flex;align-items:center;gap:10px;
+}
+.brand{flex:1 1 auto;min-width:0}
+.brand .k{
+  font-family:var(--label);font-size:10px;font-weight:700;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--muted);display:block;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.brand .t{font-size:1.02rem;font-weight:400;letter-spacing:-.01em;display:block;line-height:1.2}
+.brand .t em{font-style:italic;color:var(--iron)}
+.btn{
+  font-family:var(--label);font-size:11px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;background:var(--surface-2);border:1px solid var(--rule);
+  border-radius:4px;padding:8px 9px;cursor:pointer;white-space:nowrap;
+}
+.btn:active{background:var(--rule-soft)}
+.btn.on{background:var(--iron);border-color:var(--iron);color:var(--ground)}
+.btn:focus-visible{outline:2px solid var(--iron);outline-offset:2px}
+
+/* ---- map ---- */
+#map{flex:1 1 auto;min-height:180px;background:var(--surface-2)}
+.leaflet-container{font-family:var(--serif);background:var(--surface-2)}
+.leaflet-control-attribution{font-size:9px}
+.pin{
+  display:flex;align-items:center;justify-content:center;width:28px;height:28px;
+  border-radius:50%;background:#6E3411;color:#fff;border:2px solid #fff;
+  box-shadow:0 1px 5px rgba(0,0,0,.45);font-family:var(--label);
+  font-size:14.5px;font-weight:700;
+}
+.pin.det{background:#fff;color:#6E3411;border:2.6px solid #6E3411}
+.pin.near{box-shadow:0 0 0 4px rgba(124,61,24,.35),0 1px 5px rgba(0,0,0,.45)}
+.dia{width:17px;height:17px;background:#1F4744;border:2px solid #fff;
+  transform:rotate(45deg);box-shadow:0 1px 5px rgba(0,0,0,.45)}
+.me{
+  width:20px;height:20px;border-radius:50%;background:var(--live);
+  border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 2px 7px rgba(0,0,0,.4);
+}
+.me.stale{background:var(--muted)}
+.leaflet-popup-content{margin:11px 13px 12px;width:224px!important;font-size:.9rem;line-height:1.45}
+.pt{font-family:var(--label);font-size:12px;font-weight:700;letter-spacing:.11em;
+  text-transform:uppercase;color:#7C3D18;margin:0 0 .3em}
+.pb{margin:0;color:#3D473B}
+.pmore{margin:.55em 0 0}
+.pmore button{
+  font-family:var(--label);font-size:11px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;background:none;border:0;border-bottom:1px solid #C6CDBB;
+  color:#7C3D18;padding:0 0 2px;cursor:pointer;
+}
+
+/* ---- status strip ---- */
+.status{
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  padding:8px 12px;background:var(--surface);border-top:1px solid var(--rule);
+  font-family:var(--label);font-size:12px;letter-spacing:.07em;color:var(--muted);
+  text-transform:uppercase;font-weight:600;
+}
+.status .lead{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
+.status b{color:var(--iron);font-weight:700}
+.status .acc{flex:0 0 auto;font-variant-numeric:tabular-nums}
+
+/* ---- sheet ---- */
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:1200;
+  max-height:86vh;display:flex;flex-direction:column;
+  background:var(--surface);border-top:1px solid var(--rule);
+  border-radius:14px 14px 0 0;box-shadow:0 -8px 34px rgba(0,0,0,.3);
+  transform:translateY(102%);transition:transform .28s cubic-bezier(.2,.7,.3,1);
+  padding-bottom:var(--safe-b);
+}
+.sheet.open{transform:translateY(0)}
+@media (prefers-reduced-motion:reduce){.sheet{transition:none}}
+.sheet-head{
+  flex:0 0 auto;display:flex;align-items:flex-start;gap:10px;
+  padding:14px 16px 10px;border-bottom:1px solid var(--rule-soft);
+}
+.sheet-head .grip{
+  position:absolute;top:6px;left:50%;transform:translateX(-50%);
+  width:38px;height:4px;border-radius:2px;background:var(--rule);
+}
+.sheet-title{flex:1 1 auto;min-width:0}
+.sheet-title .k{
+  font-family:var(--label);font-size:11px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--iron);display:block;
+}
+.sheet-title h2{margin:.16em 0 0;font-size:1.24rem;font-weight:400;line-height:1.2;letter-spacing:-.01em}
+.sheet-title .w{margin:.35em 0 0;font-size:.87rem;font-style:italic;color:var(--muted);line-height:1.4}
+.xclose{
+  flex:0 0 auto;background:none;border:0;font-size:26px;line-height:1;
+  color:var(--muted);padding:0 2px;cursor:pointer;
+}
+.sheet-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 24px}
+.sheet-body p{margin:0 0 1em;max-width:38em}
+.sheet-body p:last-child{margin-bottom:0}
+.sheet-body h4{
+  font-family:var(--label);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);font-weight:700;margin:1.5em 0 .5em;
+}
+.sheet-body .verdict{
+  display:inline-block;font-family:var(--label);font-size:10.5px;font-weight:700;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--iron);
+  background:var(--iron-tint);padding:3px 9px;border-radius:2px;margin:0 0 .5em;
+}
+.sheet-body .aside{
+  margin:1.3em 0 0;padding-top:12px;border-top:1px dotted var(--rule);
+  font-size:.93rem;color:var(--ink-2);
+}
+.sheet-body .aside strong{
+  display:block;font-family:var(--label);font-size:11px;font-weight:700;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin-bottom:.3em;
+}
+.sheet-body .names{list-style:none;margin:1.2em 0 0;padding:0;border-top:1px solid var(--rule-soft)}
+.sheet-body .names li{
+  display:grid;grid-template-columns:1fr;gap:2px;padding:9px 0;
+  border-bottom:1px solid var(--rule-soft);font-size:.92rem;color:var(--ink-2);
+}
+.sheet-body .names b{
+  font-family:var(--label);font-size:11.5px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink);
+}
+.sheet-body .lookup{display:none}
+.sheet-nav{
+  flex:0 0 auto;display:flex;gap:8px;padding:10px 16px 14px;
+  border-top:1px solid var(--rule-soft);background:var(--surface);
+}
+.sheet-nav .btn{flex:1 1 0}
+
+/* ---- list ---- */
+.list{padding:6px 0 14px}
+.list button{
+  display:flex;width:100%;align-items:baseline;gap:11px;text-align:left;
+  background:none;border:0;border-bottom:1px solid var(--rule-soft);
+  padding:11px 16px;cursor:pointer;
+}
+.list button:active{background:var(--surface-2)}
+.list .n{
+  font-family:var(--label);font-size:12px;font-weight:700;color:var(--iron);
+  min-width:1.6em;font-variant-numeric:tabular-nums;
+}
+.list .nm{flex:1 1 auto;font-size:.98rem;line-height:1.3}
+.list .d{
+  font-family:var(--label);font-size:11.5px;color:var(--muted);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.list .d.near{color:var(--iron);font-weight:700}
+
+.scrim{
+  position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.34);
+  opacity:0;pointer-events:none;transition:opacity .28s ease;
+}
+.scrim.open{opacity:1;pointer-events:auto}
+
+.toast{
+  position:fixed;left:50%;bottom:calc(var(--safe-b) + 74px);transform:translateX(-50%);
+  z-index:1400;background:var(--ink);color:var(--ground);
+  font-family:var(--label);font-size:12.5px;letter-spacing:.06em;
+  padding:9px 14px;border-radius:5px;max-width:88vw;text-align:center;
+  opacity:0;pointer-events:none;transition:opacity .2s ease;
+}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <span class="k">Hampstead Heath &middot; 9.45 km</span>
+    <span class="t">The Heath <em>Underfoot</em></span>
+  </div>
+  <button class="btn" id="btnList" type="button">Stops</button>
+  <button class="btn" id="btnLoc" type="button" aria-pressed="false">Locate</button>
+</header>
+
+<div id="map"></div>
+
+<div class="status">
+  <span class="lead" id="statusLead">Tap Locate to put yourself on the map</span>
+  <span class="acc" id="statusAcc"></span>
+  <button class="btn" id="btnSave" type="button" style="padding:6px 9px">Save map</button>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<section class="sheet" id="sheet" aria-hidden="true">
+  <span class="grip"></span>
+  <div class="sheet-head">
+    <div class="sheet-title">
+      <span class="k" id="sheetKicker"></span>
+      <h2 id="sheetTitle"></h2>
+      <p class="w" id="sheetWhere"></p>
+    </div>
+    <button class="xclose" id="sheetClose" type="button" aria-label="Close">&times;</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+  <div class="sheet-nav" id="sheetNav">
+    <button class="btn" id="navPrev" type="button">&larr; Prev</button>
+    <button class="btn" id="navShow" type="button">Show on map</button>
+    <button class="btn" id="navNext" type="button">Next &rarr;</button>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+var ART="https://claude.ai/code/artifact/cacebbfc-b935-4210-8014-4fba681b975c";
+var ROUTE, STOPS, FEATS;
+ROUTE=[[51.55388, -0.1514], [51.55398, -0.15132], [51.55407, -0.15124], [51.55417, -0.15126], [51.55426, -0.15138], [51.55435, -0.15146], [51.55445, -0.15153], [51.55454, -0.15163], [51.55464, -0.15174], [51.55474, -0.15179], [51.55479, -0.15163], [51.55485, -0.15148], [51.55492, -0.15136], [51.55501, -0.15131], [51.55507, -0.15116], [51.5551, -0.15098], [51.55514, -0.15081], [51.55521, -0.15064], [51.55526, -0.15047], [51.55529, -0.1503], [51.55535, -0.15013], [51.55541, -0.14999], [51.55545, -0.14982], [51.55552, -0.14974], [51.55563, -0.1498], [51.55574, -0.14985], [51.55585, -0.14992], [51.55596, -0.14999], [51.55607, -0.15005], [51.55618, -0.15014], [51.55627, -0.15021], [51.55637, -0.1503], [51.55647, -0.15035], [51.55658, -0.15035], [51.55669, -0.1504], [51.55679, -0.15047], [51.55689, -0.15052], [51.557, -0.15059], [51.5571, -0.15066], [51.55719, -0.15077], [51.55728, -0.15088], [51.55736, -0.15102], [51.55744, -0.15112], [51.55753, -0.15124], [51.55761, -0.15137], [51.55769, -0.1515], [51.55776, -0.15165], [51.55782, -0.15179], [51.55789, -0.15194], [51.55795, -0.15209], [51.55802, -0.15223], [51.55809, -0.15239], [51.55815, -0.15254], [51.55821, -0.1527], [51.55828, -0.15285], [51.55834, -0.15299], [51.55841, -0.15314], [51.55847, -0.1533], [51.55851, -0.15346], [51.55856, -0.15362], [51.5586, -0.15378], [51.55863, -0.15396], [51.55866, -0.15413], [51.55869, -0.1543], [51.55872, -0.15448], [51.55876, -0.15465], [51.55879, -0.15483], [51.55882, -0.15501], [51.55885, -0.15519], [51.55888, -0.15537], [51.55892, -0.15553], [51.55896, -0.15571], [51.55898, -0.1559], [51.55902, -0.15608], [51.55904, -0.15625], [51.55908, -0.15643], [51.55912, -0.15661], [51.55915, -0.15678], [51.5592, -0.15695], [51.55924, -0.15714], [51.55928, -0.15731], [51.55932, -0.15747], [51.55937, -0.15763], [51.55942, -0.1578], [51.55946, -0.15797], [51.55952, -0.15813], [51.55956, -0.15831], [51.5596, -0.15848], [51.55965, -0.15865], [51.55969, -0.15882], [51.55969, -0.15899], [51.55967, -0.15917], [51.55961, -0.15932], [51.55956, -0.15948], [51.55957, -0.1596], [51.55967, -0.15969], [51.55974, -0.15982], [51.55982, -0.15997], [51.5599, -0.16009], [51.56, -0.16018], [51.56009, -0.16027], [51.5602, -0.16035], [51.56031, -0.16044], [51.56041, -0.16053], [51.5605, -0.16064], [51.56059, -0.16074], [51.56066, -0.1609], [51.56073, -0.16103], [51.56082, -0.16114], [51.56088, -0.16129], [51.56095, -0.16143], [51.56102, -0.16157], [51.56112, -0.16167], [51.56119, -0.16181], [51.56124, -0.16197], [51.56133, -0.1621], [51.56143, -0.16219], [51.56154, -0.16222], [51.56164, -0.16228], [51.56175, -0.16231], [51.56184, -0.16242], [51.56194, -0.16251], [51.56203, -0.16262], [51.56211, -0.16274], [51.56219, -0.16288], [51.56224, -0.16302], [51.56231, -0.16317], [51.56237, -0.16331], [51.56244, -0.16345], [51.56253, -0.16356], [51.56262, -0.16368], [51.56269, -0.16381], [51.56277, -0.16394], [51.56285, -0.16408], [51.56295, -0.1642], [51.56305, -0.16425], [51.56316, -0.16429], [51.56327, -0.16435], [51.56338, -0.16443], [51.56347, -0.16453], [51.56355, -0.16466], [51.56359, -0.16484], [51.56364, -0.165], [51.56368, -0.16517], [51.56372, -0.16535], [51.56374, -0.16554], [51.56376, -0.16573], [51.56377, -0.16591], [51.56378, -0.16609], [51.56381, -0.16626], [51.56383, -0.16643], [51.56385, -0.16662], [51.56389, -0.16676], [51.56398, -0.16688], [51.56406, -0.167], [51.56413, -0.16714], [51.5642, -0.1673], [51.56426, -0.16744], [51.56434, -0.16758], [51.56442, -0.16769], [51.5645, -0.16783], [51.56459, -0.16795], [51.56468, -0.16807], [51.56476, -0.16818], [51.56484, -0.16831], [51.5649, -0.16847], [51.56497, -0.16861], [51.56504, -0.16878], [51.56511, -0.16893], [51.56516, -0.1691], [51.56521, -0.16926], [51.56531, -0.16937], [51.56535, -0.16953], [51.56532, -0.16971], [51.56537, -0.16987], [51.56547, -0.16995], [51.56558, -0.16992], [51.56567, -0.16984], [51.56572, -0.16968], [51.5658, -0.16981], [51.56591, -0.16984], [51.56602, -0.16989], [51.56614, -0.16987], [51.56625, -0.16987], [51.56637, -0.16988], [51.56649, -0.16988], [51.5666, -0.16982], [51.5667, -0.16971], [51.56678, -0.16959], [51.56686, -0.16947], [51.5669, -0.1693], [51.56694, -0.16913], [51.56696, -0.16894], [51.56699, -0.16877], [51.56706, -0.16864], [51.56714, -0.16851], [51.56721, -0.16838], [51.56727, -0.16824], [51.56737, -0.16812], [51.56747, -0.16804], [51.56758, -0.168], [51.56767, -0.1679], [51.56777, -0.16781], [51.56788, -0.16784], [51.56795, -0.16797], [51.56798, -0.16814], [51.56801, -0.16831], [51.56805, -0.16847], [51.56813, -0.16852], [51.56817, -0.16858], [51.56828, -0.16864], [51.56839, -0.16864], [51.5685, -0.16862], [51.56859, -0.16873], [51.56869, -0.1688], [51.5688, -0.16883], [51.56887, -0.16897], [51.56891, -0.16915], [51.56898, -0.1693], [51.56908, -0.16937], [51.56918, -0.16931], [51.56928, -0.16922], [51.56937, -0.16911], [51.56946, -0.169], [51.56955, -0.16889], [51.56965, -0.16878], [51.56974, -0.16867], [51.56983, -0.16857], [51.56992, -0.16846], [51.57001, -0.16835], [51.57009, -0.16822], [51.57018, -0.16812], [51.57028, -0.16803], [51.57039, -0.16801], [51.57051, -0.16802], [51.57062, -0.16806], [51.57073, -0.16811], [51.57083, -0.16816], [51.57093, -0.16823], [51.57104, -0.16826], [51.57114, -0.1682], [51.57124, -0.16819], [51.57133, -0.16808], [51.57144, -0.16812], [51.57155, -0.1681], [51.57155, -0.1679], [51.57149, -0.16774], [51.57141, -0.1677], [51.57132, -0.16775], [51.57124, -0.16789], [51.57131, -0.16793], [51.5714, -0.16792], [51.57139, -0.16773], [51.57135, -0.16759], [51.57126, -0.1677], [51.57138, -0.16737], [51.5714, -0.16725], [51.57146, -0.16729], [51.57142, -0.16736], [51.57147, -0.16747], [51.57143, -0.16747], [51.57132, -0.16741], [51.5712, -0.16739], [51.57127, -0.16756], [51.57134, -0.16773], [51.57141, -0.1679], [51.57151, -0.16795], [51.57157, -0.16809], [51.57162, -0.16825], [51.57163, -0.16842], [51.57164, -0.16859], [51.57165, -0.16878], [51.57164, -0.16895], [51.57163, -0.16913], [51.5716, -0.16929], [51.57156, -0.16946], [51.57156, -0.16965], [51.57158, -0.16983], [51.5716, -0.17], [51.57168, -0.17013], [51.57175, -0.17025], [51.57181, -0.17041], [51.57184, -0.17056], [51.57181, -0.17073], [51.57178, -0.17091], [51.57177, -0.17109], [51.57176, -0.17126], [51.57179, -0.17144], [51.57183, -0.1716], [51.57188, -0.17177], [51.57198, -0.17184], [51.57202, -0.17197], [51.57197, -0.17213], [51.57193, -0.17229], [51.57186, -0.17244], [51.57179, -0.17257], [51.57171, -0.1727], [51.57162, -0.17283], [51.57154, -0.17295], [51.57145, -0.17306], [51.57136, -0.17316], [51.57126, -0.17325], [51.57115, -0.17336], [51.57106, -0.17346], [51.57095, -0.17354], [51.57085, -0.17361], [51.57074, -0.17367], [51.57062, -0.17372], [51.57051, -0.17374], [51.5704, -0.17376], [51.57029, -0.17377], [51.57018, -0.17379], [51.57008, -0.17386], [51.57001, -0.17398], [51.56993, -0.17399], [51.57004, -0.17403], [51.57007, -0.17413], [51.56997, -0.17403], [51.56985, -0.17397], [51.56977, -0.17402], [51.56982, -0.17387], [51.56972, -0.17392], [51.56962, -0.17406], [51.56954, -0.17417], [51.56944, -0.17427], [51.56934, -0.17436], [51.56924, -0.17443], [51.56914, -0.17452], [51.56905, -0.17461], [51.56896, -0.17469], [51.56887, -0.17482], [51.56895, -0.17492], [51.56906, -0.17492], [51.56904, -0.17504], [51.56899, -0.17521], [51.56894, -0.17538], [51.56889, -0.17553], [51.56882, -0.17567], [51.56874, -0.1758], [51.56866, -0.17593], [51.56858, -0.17605], [51.56852, -0.17619], [51.56845, -0.17634], [51.56838, -0.17648], [51.56833, -0.17664], [51.56827, -0.17681], [51.56821, -0.17696], [51.56815, -0.17712], [51.56809, -0.17726], [51.56802, -0.1774], [51.56798, -0.17756], [51.56793, -0.17773], [51.56789, -0.1779], [51.56784, -0.17807], [51.5678, -0.17823], [51.56776, -0.1784], [51.56773, -0.17857], [51.56781, -0.17867], [51.56792, -0.17871], [51.56798, -0.17886], [51.56792, -0.17899], [51.56785, -0.17913], [51.56783, -0.17931], [51.56781, -0.1795], [51.56782, -0.17969], [51.56786, -0.17986], [51.5679, -0.18004], [51.5679, -0.18023], [51.56787, -0.18041], [51.56784, -0.18059], [51.56781, -0.18077], [51.56774, -0.1809], [51.56769, -0.18106], [51.56765, -0.18122], [51.56762, -0.1814], [51.56759, -0.18158], [51.56753, -0.18174], [51.56749, -0.18192], [51.56747, -0.1821], [51.56742, -0.18226], [51.56738, -0.18242], [51.56736, -0.18262], [51.56736, -0.18278], [51.56745, -0.18288], [51.56749, -0.183], [51.56739, -0.18308], [51.56732, -0.1832], [51.56725, -0.18335], [51.56719, -0.1835], [51.56723, -0.18366], [51.56727, -0.18384], [51.56721, -0.18391], [51.5671, -0.18384], [51.56699, -0.1838], [51.56689, -0.18384], [51.5668, -0.18394], [51.5667, -0.18397], [51.56663, -0.18384], [51.56656, -0.18371], [51.56646, -0.18363], [51.56635, -0.18363], [51.56624, -0.1836], [51.56617, -0.18368], [51.56612, -0.18352], [51.56606, -0.18337], [51.566, -0.18325], [51.56597, -0.18308], [51.56591, -0.18293], [51.56584, -0.18277], [51.56575, -0.18267], [51.56567, -0.18253], [51.56561, -0.18238], [51.56553, -0.18225], [51.56547, -0.18209], [51.56537, -0.18198], [51.56532, -0.1821], [51.56529, -0.18228], [51.56521, -0.18241], [51.56511, -0.18249], [51.56499, -0.18253], [51.56488, -0.18253], [51.56477, -0.1825], [51.56467, -0.18243], [51.56457, -0.18232], [51.56447, -0.18229], [51.56436, -0.18229], [51.56425, -0.18231], [51.56414, -0.18231], [51.56403, -0.18227], [51.56392, -0.18226], [51.5638, -0.18229], [51.5637, -0.18222], [51.56359, -0.1822], [51.56348, -0.18216], [51.56337, -0.18218], [51.56326, -0.18215], [51.56315, -0.18208], [51.56305, -0.18202], [51.56294, -0.18196], [51.56283, -0.1819], [51.56272, -0.18184], [51.56261, -0.18181], [51.56252, -0.18177], [51.56253, -0.1816], [51.56247, -0.18146], [51.56239, -0.18132], [51.56236, -0.18114], [51.56232, -0.18097], [51.56226, -0.18082], [51.56217, -0.18072], [51.56207, -0.18067], [51.56196, -0.1806], [51.56185, -0.18054], [51.56174, -0.18048], [51.56164, -0.18041], [51.56154, -0.18033], [51.56143, -0.1804], [51.56136, -0.18054], [51.56132, -0.1807], [51.56125, -0.18086], [51.56118, -0.181], [51.5611, -0.18113], [51.56101, -0.18122], [51.56091, -0.1813], [51.56081, -0.18138], [51.5607, -0.18143], [51.56059, -0.18143], [51.56048, -0.1814], [51.56037, -0.18144], [51.56026, -0.18146], [51.56015, -0.18145], [51.56005, -0.18138], [51.55994, -0.18132], [51.55984, -0.18124], [51.55975, -0.18112], [51.55966, -0.18105], [51.55956, -0.18099], [51.55947, -0.18087], [51.55945, -0.1807], [51.55948, -0.18053], [51.5595, -0.18035], [51.55954, -0.18019], [51.55958, -0.18002], [51.55957, -0.17984], [51.55955, -0.17966], [51.55952, -0.17949], [51.55944, -0.17942], [51.55933, -0.17942], [51.55921, -0.17941], [51.5591, -0.17943], [51.55899, -0.17943], [51.55888, -0.17942], [51.55877, -0.17939], [51.55864, -0.17942], [51.55854, -0.17948], [51.55843, -0.17944], [51.55832, -0.17949], [51.55822, -0.17957], [51.55812, -0.17965], [51.55801, -0.17971], [51.5579, -0.17971], [51.55782, -0.17961], [51.55779, -0.17944], [51.55783, -0.17932], [51.55795, -0.17932], [51.55784, -0.17924], [51.55779, -0.17913], [51.55795, -0.17929], [51.55793, -0.17927], [51.55782, -0.17924], [51.55781, -0.17923], [51.55779, -0.17922], [51.55781, -0.1792], [51.55783, -0.17923], [51.55778, -0.17923], [51.55779, -0.17922], [51.55779, -0.17922], [51.55779, -0.1792], [51.55783, -0.17919], [51.55772, -0.17914], [51.55761, -0.17907], [51.55751, -0.17905], [51.5574, -0.17898], [51.55731, -0.17901], [51.5573, -0.17892], [51.55728, -0.17874], [51.55729, -0.17857], [51.55735, -0.17842], [51.55735, -0.17826], [51.55726, -0.17817], [51.55721, -0.17801], [51.55713, -0.17788], [51.55705, -0.17775], [51.55696, -0.17763], [51.55687, -0.17751], [51.55677, -0.17739], [51.55675, -0.17723], [51.55685, -0.17712], [51.55695, -0.17701], [51.55703, -0.17689], [51.55713, -0.17679], [51.55722, -0.17669], [51.5573, -0.17657], [51.5574, -0.17646], [51.55747, -0.17632], [51.55756, -0.1762], [51.55765, -0.17611], [51.55771, -0.17596], [51.5577, -0.17579], [51.55769, -0.1756], [51.5577, -0.17542], [51.55774, -0.17526], [51.55779, -0.17511], [51.55783, -0.17494], [51.55789, -0.17478], [51.55797, -0.17466], [51.55805, -0.17455], [51.55815, -0.17443], [51.55824, -0.17431], [51.55833, -0.17418], [51.55843, -0.17408], [51.55853, -0.17401], [51.55863, -0.17392], [51.55873, -0.17385], [51.55885, -0.17377], [51.55894, -0.17367], [51.55902, -0.17356], [51.55913, -0.17349], [51.55922, -0.1734], [51.55931, -0.17329], [51.55942, -0.17321], [51.55951, -0.17311], [51.5596, -0.17301], [51.55967, -0.17294], [51.55976, -0.17283], [51.55985, -0.17272], [51.55994, -0.17261], [51.56003, -0.17251], [51.56014, -0.17244], [51.56021, -0.17229], [51.56029, -0.17216], [51.56037, -0.17203], [51.56042, -0.17186], [51.56043, -0.17167], [51.56044, -0.17148], [51.56047, -0.17131], [51.56049, -0.17113], [51.5605, -0.17096], [51.56051, -0.17078], [51.56052, -0.17059], [51.56053, -0.17041], [51.56051, -0.17023], [51.56048, -0.17006], [51.56043, -0.16991], [51.56036, -0.16977], [51.56031, -0.1696], [51.56024, -0.16947], [51.56017, -0.16934], [51.5601, -0.16919], [51.56003, -0.16906], [51.55996, -0.16892], [51.55989, -0.16877], [51.55983, -0.16861], [51.55979, -0.16845], [51.55975, -0.16828], [51.55969, -0.16813], [51.55965, -0.16798], [51.55961, -0.1678], [51.5596, -0.16762], [51.55957, -0.16745], [51.55954, -0.16729], [51.55949, -0.16712], [51.55947, -0.16695], [51.55944, -0.16678], [51.55942, -0.16659], [51.55947, -0.16644], [51.55951, -0.16627], [51.55955, -0.16611], [51.55962, -0.16595], [51.55966, -0.16579], [51.5597, -0.16562], [51.55974, -0.16544], [51.55978, -0.16526], [51.55981, -0.16508], [51.55981, -0.16489], [51.55977, -0.16473], [51.55971, -0.16457], [51.55966, -0.16441], [51.55961, -0.16424], [51.55959, -0.16406], [51.55961, -0.16387], [51.5596, -0.16369], [51.55961, -0.16351], [51.55964, -0.16332], [51.55967, -0.16313], [51.55969, -0.16294], [51.5597, -0.16275], [51.55961, -0.16263], [51.55951, -0.16255], [51.5594, -0.16246], [51.5593, -0.16237], [51.5592, -0.16229], [51.55911, -0.16218], [51.55904, -0.16205], [51.55897, -0.1619], [51.55894, -0.16173], [51.55892, -0.16156], [51.55887, -0.16139], [51.55882, -0.16122], [51.55875, -0.16109], [51.55866, -0.16098], [51.55855, -0.16092], [51.55845, -0.16086], [51.55837, -0.16075], [51.55828, -0.16065], [51.55818, -0.16057], [51.55808, -0.16046], [51.55798, -0.16039], [51.55787, -0.1603], [51.55778, -0.1602], [51.55769, -0.1601], [51.55759, -0.16001], [51.55749, -0.15992], [51.55737, -0.15984], [51.55727, -0.15974], [51.55717, -0.15964], [51.55708, -0.15955], [51.55698, -0.15946], [51.55688, -0.15937], [51.55678, -0.15928], [51.55668, -0.15919], [51.55657, -0.15908], [51.55648, -0.15898], [51.5564, -0.15885], [51.55635, -0.15869], [51.5563, -0.15855], [51.55618, -0.15853], [51.55607, -0.15853], [51.55596, -0.15851], [51.55584, -0.1585], [51.55573, -0.15848], [51.55563, -0.15841], [51.55559, -0.15825], [51.5556, -0.15807], [51.55562, -0.15788], [51.55566, -0.1577], [51.55568, -0.15752], [51.55569, -0.15732], [51.55571, -0.15715], [51.55575, -0.15698], [51.55576, -0.15679], [51.55575, -0.15661], [51.55577, -0.15643], [51.55579, -0.15624], [51.5558, -0.15606], [51.55578, -0.15587], [51.55575, -0.1557], [51.55567, -0.1556], [51.55555, -0.15552], [51.55545, -0.15546], [51.55534, -0.15539], [51.55524, -0.15531], [51.55513, -0.15524], [51.55503, -0.15517], [51.55492, -0.1551], [51.55481, -0.15501], [51.55471, -0.15493], [51.55462, -0.15484], [51.55452, -0.15477], [51.55441, -0.15472], [51.5543, -0.15466], [51.5542, -0.15458], [51.55409, -0.15452], [51.55398, -0.15447], [51.55388, -0.15437], [51.55378, -0.15429], [51.55367, -0.15422], [51.55357, -0.15413], [51.5536, -0.15395], [51.55365, -0.15379], [51.55371, -0.15363], [51.55376, -0.15346], [51.55382, -0.1533], [51.55388, -0.15314], [51.55387, -0.15297], [51.55381, -0.15282], [51.55371, -0.15274], [51.55362, -0.15262], [51.5536, -0.15245], [51.55362, -0.15228], [51.55352, -0.15219], [51.55349, -0.15205], [51.55351, -0.15187], [51.55357, -0.15171], [51.55365, -0.15202], [51.5536, -0.15186], [51.5535, -0.1518], [51.55355, -0.15185], [51.55363, -0.15171], [51.5537, -0.15155], [51.55373, -0.15147]];
+STOPS=[{"n": 1, "title": "Oak Village, and the tree that isn't there", "where": "The terraces where you started, between Lamble Street and Gordon House Road.", "km": 0.0, "ele": 45, "html": "<p>You begin at a memorial to a missing tree. Gospel Oak takes its name from an oak that stood on the boundary between the parishes of Hampstead and St Pancras, near the corner of what is now Mansfield Road and Southampton Road. At the annual beating of the bounds \u2014 the parish walk that fixed the boundary in living memory before maps could be trusted \u2014 the procession halted at the tree and a passage of the Gospel was read over it. The oak was last recorded on a map in 1801 and had gone by some point in the nineteenth century. Oak Village, the little grid of cottages you set off from, is named for it.</p> <p>Under your feet, the River Fleet. Its western branch rises on the Heath, comes down through the pond chain you will cross at stop 19, and runs culverted beneath Fleet Road and Southampton Road on its way to Blackfriars. It is the reason this valley was farmed rather than built on until the railways arrived.</p> <p>The three landowners who shaped these streets were the Earls of Mansfield, Southampton and Lisburne. That first name matters for the rest of the walk: the Mansfields of Kenwood, whose house you reach at stop 7, owned the land you are standing on. Their surname is on Mansfield Road; their house's approach road is Gordon House Road. Serious building started in the mid-1800s and accelerated after Gospel Oak station opened in 1860 \u2014 confusingly named Kentish Town until 1867.</p> <div class=\"aside\"> <strong>One street over</strong> Lissenden Gardens, the mansion-block estate on the far side of the railway, is where John Betjeman was born in 1906. He later wrote a poem called <em>Parliament Hill Fields</em> about the tram ride up Highgate Road. </div>", "lat": 51.55388, "lon": -0.1514, "detour": false}, {"n": 2, "title": "Through the gate: how the Fields were bought", "where": "The Gordon House Road entrance, past the athletics track, climbing north-west.", "km": 0.6, "ele": 53, "html": "<p>These 270-odd acres were nearly a housing estate. When the Metropolitan Board of Works bought the original Heath in 1871 (stop 5), Parliament Hill Fields was not included \u2014 it was farmland and parkland belonging to the Mansfield estate and its neighbours, and everyone understood it would be built over.</p> <p>A public campaign, fronted by Baroness Burdett-Coutts and Octavia Hill, raised the money instead. The Hampstead Heath Enlargement Act of 1886 (amended in 1888) authorised the purchase; the Board adopted it in 1889, weeks before the Board itself was abolished and replaced by the London County Council. The price was \u00a3300,000 \u2014 a startling sum, roughly six times what the whole of the original Heath had cost eighteen years earlier \u2014 and it doubled the size of the open space at a stroke.</p> <p>As you climb the eastern slope, look for the <strong>Stone of Free Speech</strong>, a low block of stone set in the grass. Its origins are murky, but it seems to have been a rallying point for open-air religious and political meetings around two centuries ago, and it is the reason the eastern flank of the hill has a long tradition of soapbox oratory. On the ground above it, George Whitefield is said to have preached in 1739, to draw a crowd away from the horse races then run on the Heath.</p>", "lat": 51.55787, "lon": -0.15189, "detour": false}, {"n": 3, "title": "Parliament Hill \u2014 named by the losing side", "where": "The summit bench and the view indicator. Your watch logged 98.8 m here.", "km": 1.2, "ele": 98, "html": "<p>Two stories compete, both seventeenth-century, and the second is the likelier.</p> <p>The famous one: that Robert Catesby, Guy Fawkes and their fellow conspirators came here on 5 November 1605 to watch Parliament blow up. It is a lovely idea, and it is what gave the hill its older name of <strong>Traitors' Hill</strong>. But there is no contemporary evidence for it \u2014 the earliest printed versions are Victorian, and the conspirators had rather more pressing business that night.</p> <p>The sober one: during the Civil War, troops loyal to Parliament occupied and fortified the high ground north of London, and this hill was one of the observation points. To Royalists it was Traitors' Hill; to the other side it was Parliament Hill. The name that stuck is the Parliamentarians'.</p> <p>The view is legally defended. Parliament Hill holds one of London's protected strategic views, which is why the skyline in front of you has a conspicuous gap: developers cannot build into the sightline of St Paul's from this spot. The Palace of Westminster is visible too, which does no harm to the first story.</p> <div class=\"aside\"> <strong>A footnote from the press</strong> In 1892 a boy digging on the hill is reported to have turned up coins and silver vessels valued at \u00a32,000 \u2014 declared treasure trove and claimed by the Crown. </div>", "lat": 51.55967, "lon": -0.15969, "detour": false}, {"n": 4, "title": "The Tumulus: Boudica's grave, minus Boudica", "where": "A railed, tree-covered mound a couple of hundred metres north-east of the path you took off the summit.", "km": 1.5, "ele": 95, "html": "<p class=\"verdict\">Legend, tested and failed</p> <p>A circular mound about 40 m across, ringed with iron railings and hawthorn. Victorian antiquarians decided it was the burial place of Boudica after her defeat by Suetonius Paulinus in AD 60 or 61, and the idea took hold so firmly that the sculptor of the Westminster Bridge Boudica group proposed siting his statue on top of it.</p> <p>It was excavated in 1894. Nothing was found \u2014 no burial, no grave goods, nothing but domestic rubbish. The current best guesses are that it is either a genuine Bronze Age round barrow that was thoroughly robbed long ago, or, more prosaically, the raised mound of a seventeenth-century windmill. Neither has been proved.</p> <p>The Heath does have real prehistory: Mesolithic flint tools have been found here, evidence of hunter-gatherers on this ridge around 7000 BC. Just not a queen.</p>", "lat": 51.5626, "lon": -0.161, "detour": true}, {"n": 5, "title": "The Viaduct ridge, and forty years of siege", "where": "The high ground crossing north-west towards Kenwood. The Viaduct and its pond lie in the valley below and to your left.", "km": 2.2, "ele": 116, "html": "<p>This is the ground on which the whole Heath was won, and it is worth knowing the fight in detail because it is the most consequential thing that ever happened here.</p> <p>The manor of Hampstead is old \u2014 Ethelred the Unready granted land at \"Hemstede\" to Westminster Abbey in 986, and it appears in Domesday. It passed into private hands in the twelfth century and, by 1767, into the Wilson family. In 1821 <strong>Sir Thomas Maryon Wilson</strong> inherited, and spent the next forty-eight years trying to build on it.</p> <p>He was not a villain of the pantomime sort; he was a landowner with an entailed estate and a legally sound plan. He brought private bills before Parliament in 1829, 1830, 1843, 1844, 1853, 1854 and 1856. Every one was defeated or withdrawn. The 1856 attempt was overtaken by a general Act on settled estates that contained a clause, unprecedented and clearly personal, expressly barring him from using it.</p> <p>Blocked in Parliament, he built anyway on land he held outright. From 1844 he threw a brick viaduct across the boggy valley below you \u2014 the foundation stone was laid in 1845 \u2014 as the spine of a carriage road serving 28 villas in the style of Regent's Park. He got a few courses of brick into the first villa. The excavations kept collapsing; the water kept coming in. The scheme died, and what survives is a handsome ornamental bridge over a handsome ornamental pond, carrying a road from nowhere to nowhere. It is the most eloquent ruin on the Heath.</p> <p>Wilson died in 1869. His brother John, who inherited, had no appetite for the war. The Hampstead Heath Act 1871 let the Metropolitan Board of Works buy roughly 220 acres for \u00a345,000 plus \u00a32,000 in costs, on the statutory condition that it be \"kept unenclosed and unbuilt on\" for ever. Everything you walk over today descends from that sentence.</p> <div class=\"aside\"> <strong>Why the Heath drains the way it does</strong> Underneath is London Clay, capped by Bagshot Sands and Claygate Beds. Water sinks through the sand, hits the clay and comes out sideways as springs \u2014 which is why there are ponds in every valley, why the sand was worth digging (stop 10), and why Wilson's villa foundations kept filling up. </div>", "lat": 51.56535, "lon": -0.16983, "detour": false}, {"n": 6, "title": "Kenwood's south lawn: a bridge that is a painting", "where": "Below the house, by the water, before the final climb to the terrace.", "km": 2.8, "ele": 102, "html": "<p>The dip your watch recorded here is the dam of the <strong>Thousand Pound Pond</strong>. At its far end sits the <strong>Sham Bridge</strong>: a wooden screen, painted and shaped to read as a three-arched bridge from the house, with nothing behind it. It is pure eighteenth-century scene-painting \u2014 a picturesque incident placed to close the view from the terrace.</p> <p><strong>Humphry Repton</strong>, the last of the great English landscape improvers, came to Kenwood on 8 May 1793 at the invitation of the 2nd Earl of Mansfield, and produced one of his celebrated Red Books \u2014 the watercolour before-and-after volumes that were his sales technique \u2014 in a matter of weeks. He moved the approach drives, resited the kitchen garden and stables, laid out a flower garden west of the house, and planted along the southern boundary specifically to hide Kentish Town. He also wanted the Sham Bridge removed, calling it beneath the dignity of Kenwood. He was overruled. It is still there, and it is now one of the best-loved things on the estate.</p> <p>The lawns hold two twentieth-century interventions worth finding: Barbara Hepworth's <em>Monolith (Empyrean)</em> of 1953 and Henry Moore's <em>Two Piece Reclining Figure No. 5</em> of 1964.</p>", "lat": 51.5693, "lon": -0.16917, "detour": false}, {"n": 7, "title": "Kenwood House", "where": "The terrace and the Adam library. You stopped here for twenty minutes.", "km": 3.1, "ele": 112, "html": "<p>A house called Caen Wood stood here from about 1616, built by John Bill, King's Printer to James I, and rebuilt around 1694 by William Bridges, Surveyor-General of the Ordnance. Everything that makes the building famous begins in 1754, when it was bought by <strong>William Murray, 1st Earl of Mansfield</strong>, Lord Chief Justice of England.</p> <p>From 1764 Murray employed <strong>Robert Adam</strong> to remodel it. Adam added the Ionic portico and \u2014 his masterstroke \u2014 the library on the east end, built to balance the existing orangery on the west and to hold Murray's books. It is one of the finest surviving Adam interiors anywhere, a barrel-vaulted room with apsidal ends screened by columns, and it was designed, in Adam's own framing, as a room for both books and company.</p> <h4 >Mansfield, Somerset, and Dido Belle</h4> <p>In 1772 Mansfield decided <em>Somerset v Stewart</em>, the case of James Somerset, an enslaved man brought to England who escaped and was seized to be shipped to Jamaica. Mansfield ruled that slavery was \"of such a nature, that it is incapable of being introduced on any reasons, moral or political; but only positive law\" \u2014 that is, it could exist only where a statute expressly created it, and no English statute did. He afterwards insisted the judgment settled only the narrow question of forcible removal, but abolitionists read it as holding that slavery could not exist on English soil, and it became one of the load-bearing texts of the movement.</p> <p>Living in this house at the time was <strong>Dido Elizabeth Belle</strong> (1761\u20131804), the daughter of Mansfield's nephew Sir John Lindsay and Maria Belle, an enslaved African woman in the West Indies. Brought to England in 1765 and raised at Kenwood alongside her cousin Lady Elizabeth Murray, Dido lived here for some three decades in a position with no real precedent: she managed the dairy and poultry yards, and \u2014 far more unusually \u2014 took dictation for the Lord Chief Justice's correspondence, work normally done by a male secretary. A visitor in 1779, Thomas Hutchinson, recorded that she \"was called upon by my Lord every minute for this thing and that.\"</p> <p>The limits were real and should not be softened. She received \u00a320 a year against Lady Elizabeth's \u00a3100; she did not dine with formal company, joining the ladies afterwards for coffee; and Mansfield's will, which confirmed her freedom and left her \u00a3500 and an annuity of \u00a3100, pointedly declined to name her as his niece. Lady Elizabeth got \u00a310,000. A contemporary painting of the two young women together, long attributed to Zoffany and now generally given to David Martin (c. 1778), hangs in Scotland; Historic England calls it unique in eighteenth-century British art for showing a Black woman and a white woman as near equals. Dido married John Davinier in 1793 and died in Pimlico in 1804, aged 43.</p> <h4 >Riot, bequest and theft</h4> <p>In June 1780 the anti-Catholic <strong>Gordon Riots</strong> engulfed London. Mansfield's Bloomsbury house was burned with his library in it, and a mob set out for Kenwood. The tradition \u2014 pub-owned but consistently told \u2014 is that the landlord of the Spaniards Inn (stop 8) stood the rioters free ale until cavalry arrived. The house survived.</p> <p>The 2nd Earl added north wings by George Saunders; George III visited in 1794, William IV and Queen Adelaide in 1835. By the twentieth century the family had let the place out, to a Russian grand duke and then to an American heiress, and in 1922 the estate came onto the market for building. A Kenwood Preservation Council raised the money for 100 acres of the grounds, and 32 acres south of the mansion were opened to the public by George V in 1925.</p> <p>The house itself was saved by beer. <strong>Edward Cecil Guinness, 1st Earl of Iveagh</strong>, bought Kenwood with 74 acres in 1925, filled it with sixty-three Old Masters from his own collection, and left the whole thing to the nation on his death in 1927. It opened as a public gallery in 1928. What hangs here \u2014 Rembrandt's late <em>Self-Portrait with Two Circles</em>, Vermeer's <em>The Guitar Player</em>, Hals, Gainsborough, Reynolds, Romney \u2014 is among the best collections in Britain, and it is free.</p> <p>On the night of 23 February 1974 a thief cut the phone lines, smashed the shutters and a barred ground-floor window with a sledgehammer, took <em>The Guitar Player</em> and went over a ten-foot wall. The ransom note demanded that the IRA prisoners Dolours and Marion Price be transferred from an English prison to one in Ireland. Police long suspected Rose Dugdale, though she was never charged with it. The painting was recovered on 7 May 1974, propped against a gravestone in the churchyard of St Bartholomew the Great in Smithfield, wrapped in newspaper and tied with string. It was damp. It was otherwise fine.</p> <ul class=\"names\"> <li><b>c.1616</b><span>Caen Wood House built by John Bill, King's Printer</span></li> <li><b>1754</b><span>Bought by William Murray, 1st Earl of Mansfield</span></li> <li><b>1764</b><span>Robert Adam begins the remodelling; the library follows</span></li> <li><b>1772</b><span>Mansfield decides <em>Somerset v Stewart</em></span></li> <li><b>1780</b><span>Gordon Riots; Kenwood threatened, Bloomsbury house burned</span></li> <li><b>1793</b><span>Repton's Red Book; Mansfield dies; Dido Belle leaves and marries</span></li> <li><b>1925\u201328</b><span>Iveagh buys, dies, bequeaths; opens as a public gallery</span></li> <li><b>1974</b><span>Vermeer stolen in February, recovered in May</span></li> <li><b>1986</b><span>Passes to English Heritage on the abolition of the GLC</span></li> </ul>", "lat": 51.57155, "lon": -0.1679, "detour": false}, {"n": 8, "title": "Hampstead Lane and the Spaniards Inn", "where": "Along Kenwood's northern edge. The inn and its tollhouse pinch the road 350 m to your north-west.", "km": 3.8, "ele": 120, "html": "<p>The pub claims 1585, and stood at the entrance to the Bishop of London's estate \u2014 this was the boundary, and a boundary stone dated 1755 is still in the front garden. Opposite it, jutting into the carriageway, is the <strong>tollhouse of about 1710</strong>. The two buildings squeeze the road to a single lane, which is why a 1966 proposal to demolish the tollhouse was thrown out: removing it would have made the traffic worse, not better.</p> <p>The name most likely commemorates a Spanish ambassador who lodged there, though several rival explanations circulate.</p> <p class=\"verdict\">Legend</p> <p><strong>Dick Turpin.</strong> The pub says his father was landlord and that Turpin drank here. There is no documentary support for either claim. What is documented is that this stretch of road was genuinely dangerous \u2014 arrests for highway robbery nearby are recorded in 1751 \u2014 so the association is at least the right kind of story in the right place.</p> <p>The literary tally is unusually long for one pub. Dickens put it in <em>The Pickwick Papers</em>, where Mrs Bardell is lured to the tea gardens. Bram Stoker used it in <em>Dracula</em>. Constable painted <em>Road to the Spaniards, Hampstead</em> in 1822. Galsworthy brought the Forsytes here. The pub's claim that Keats wrote <em>Ode to a Nightingale</em> in the garden is affectionate rather than accurate \u2014 he wrote it at Wentworth Place, a mile south-east.</p>", "lat": 51.57158, "lon": -0.1729, "detour": false}, {"n": 9, "title": "Spaniards Road: a causeway on a sand ridge", "where": "The ridge road. Your track paused here for nearly two hours \u2014 the lunch of the Lunch Walk.", "km": 4.0, "ele": 134, "html": "<p>You are on the spine of the Northern Heights, at 134 m the second-highest ground on the walk. The road runs along a natural sand ridge, and the reason it feels like a causeway \u2014 raised, with the heath dropping away on both sides behind avenues of trees \u2014 is that the land either side was quarried out from under it.</p> <p>Sand digging was the Heath's industry. In 1813 the fine sand was reckoned to average ten feet in depth. The lord of the manor sold it by the cartload \u2014 about twenty cartloads a day around 1811 \u2014 and copyholders complained bitterly in 1806 that the pits were dangerous and had nearly destroyed the place. In 1866\u201367 the Midland Railway bought quarter-acre strips along Spaniards Road and dug 25 feet down. In 1924 the road was closed to motor traffic on either side and the flanking tracks became bridle paths.</p> <div class=\"aside\"> <strong>Elms House</strong> Off the southern end of Spaniards Road stood Elms House, on the site of Mother Huff's tea garden (in business 1678\u20131728). Thomas Erskine, later Lord Chancellor, lived there 1811\u201319; it became St Columba's Hospital in 1957, was later owned by the Woolworths heiress Barbara Hutton, and was converted to flats in 1987. </div>", "lat": 51.57005, "lon": -0.17411, "detour": false}, {"n": 10, "title": "Sandy Heath: the landscape that is an absence", "where": "West of Spaniards Road, in the pits and hummocks under the birches.", "km": 4.5, "ele": 130, "html": "<p>Sandy Heath \u2014 the triangle between Spaniards Road and North End Way, known when the Board bought it in 1871 as North Heath \u2014 looks like ancient wild wood. It is not. Almost every hollow, bank and pond here is a quarry, and the ground level is many feet below where it used to be. This is a post-industrial landscape that has had 150 years to grow a wood over itself, and it is now among the quietest parts of the Heath. In 2021 Quiet Parks International gave Hampstead Heath \"Urban Quiet Park\" status; this is the corner that earns it.</p> <p>Look for the <strong>Walter Field Memorial Fountain</strong>, put up in 1907 by the sister of the landscape painter Walter Field (b. 1837), who worked on the Heath. It is a listed structure and easy to walk past.</p> <p>Beyond, to the north, lies the <strong>Heath Extension</strong> \u2014 80 acres of Eton College's Wyldes farm, bought in 1907 after a campaign led by Henrietta Barnett, who then built Hampstead Garden Suburb up against it. She and her husband Samuel are commemorated with a blue plaque on Spaniards Road.</p>", "lat": 51.56788, "lon": -0.17792, "detour": false}, {"n": 11, "title": "North End: a Prime Minister's breakdown and a music-hall song", "where": "The westernmost point of your walk, at the top of North End Way.", "km": 4.9, "ele": 114, "html": "<p>A hamlet, then a resort, now barely a place at all. Three things happened here.</p> <p><strong>Pitt's seclusion.</strong> The merchant Charles Dingley invited <strong>William Pitt the Elder</strong> to North End in 1763 and rebuilt the house for him \u2014 a new wing, and a gymnasium for the children \u2014 by 1766, when Pitt moved in. Pitt was by then Earl of Chatham and, from 1766, effectively Prime Minister; in 1767 he collapsed into a severe depressive illness and withdrew here almost completely, refusing to see ministers and reportedly having meals passed through a hatch. The house was known variously as North End House, Wildwoods and finally Pitt House. It was demolished in 1952. An archway and a stretch of wall survive, in what is now called Pitt's Garden.</p> <p><strong>Wyldes Farm.</strong> Medieval land of the leper hospital of St James, bought by Eton College in 1449; the farmhouse dates from about 1600. The painter <strong>John Linnell</strong> moved his family here in the 1820s to escape London's air, and his visitors included <strong>William Blake</strong> \u2014 Linnell was Blake's patron in his last years, and it was Linnell who commissioned the Dante watercolours and the Job engravings. <strong>Charles Dickens</strong> stayed briefly in 1837, in the shattering weeks after the death of his sister-in-law Mary Hogarth. Raymond Unwin, co-planner of the Garden Suburb, lived there from 1906 to 1940. It survives as The Old Wyldes.</p> <p><strong>The Old Bull and Bush.</strong> A farmhouse by 1645, licensed to sell ale in 1721, with a music licence from 1867. Hogarth is said to have drunk here and to have had a hand in laying out the garden. It gave its name to the music-hall song made famous by Florrie Forde, which is why a pub on the edge of a heath is known to people who have never been to London.</p> <div class=\"aside\"> <strong>The station that never opened</strong> Beneath you is North End station \u2014 \"Bull and Bush\" \u2014 begun for the Charing Cross, Euston and Hampstead Railway and abandoned at platform level when Henrietta Barnett's campaign stopped development above it. It would have been the deepest station on the Underground. In the 1950s the shell was fitted out as a control centre for the deep-tube flood gates. An emergency stair of 197 steps comes up on Hampstead Way. </div>", "lat": 51.5675, "lon": -0.18293, "detour": false}, {"n": 12, "title": "West Heath and the Leg of Mutton Pond", "where": "Turning south through the woods. The pond lies about 100 m to your west.", "km": 5.4, "ele": 122, "html": "<p>The <strong>Leg of Mutton Pond</strong>, named for its shape, was dug around 1816 \u2014 almost certainly as a make-work scheme. The Napoleonic wars had ended in 1815; demobilised soldiers and a collapsed war economy produced serious unemployment, and parishes across England responded by inventing earthworks. This is one of them: a piece of Regency welfare policy that is now simply a nice pond.</p> <p>West Heath, between North End Way and West Heath Road, came into public hands with the rest in 1871. It is the least visited third of the Heath and the most wooded.</p>", "lat": 51.56455, "lon": -0.18231, "detour": false}, {"n": 13, "title": "The Hill Garden and Pergola: soap money and tunnel spoil", "where": "The high point of the walk. The pergola runs 250 m along the ridge above West Heath.", "km": 5.8, "ele": 136, "html": "<p>This is the strangest thing on the Heath and the best argument for a February walk, when the wisteria is bare and the structure reads as pure architecture.</p> <p><strong>William Hesketh Lever</strong> \u2014 Lever Brothers, Sunlight Soap, later 1st Viscount Leverhulme \u2014 bought The Hill in 1904 and hired the landscape architect <strong>Thomas Mawson</strong>. The problem was the site: to look out over the Heath rather than at it, the garden needed to be 20 to 30 feet higher than it was. The solution arrived by cart. The Charing Cross, Euston and Hampstead Railway was at that moment driving its tunnels out to Golders Green, opened in 1907, and Lever bought the spoil. The terraces you walk on are, in substance, the inside of the Northern line.</p> <p>The first stage was finished in 1906 and Lever kept extending it for the rest of his life \u2014 buying adjoining land, adding a ballroom beneath the terrace in 1923, still building when he died in 1925. The result is a raised classical walk of columns, vaults and belvederes, laid out for a soap magnate's garden parties, with the wild heath immediately below it.</p> <p>After Lever's death the house was bought by Andrew Weir, 1st Baron Inverforth, and renamed <strong>Inverforth House</strong>. He left it to Manor House Hospital in 1955; the London County Council took the gardens in 1960 and opened them to the public in 1963; the Corporation of London took over in the late 1980s and has been restoring the structure, which had been left to fall down, ever since. The house was sold to developers in the 1990s and is now flats.</p> <div class=\"aside\"> <strong>The roof of inner London</strong> Your track's highest reading, 136.6 m, is on this ridge. The summit of the Heath just west of Spaniards Road, at 137 m, is the highest point in Inner London and was the highest point of the old County of London. It is not the highest point in Greater London \u2014 that is Westerham Heights in Bromley, at 245 m. </div>", "lat": 51.56187, "lon": -0.18055, "detour": false}, {"n": 14, "title": "Whitestone Pond and Jack Straw's Castle", "where": "A 250 m detour east from where you crossed North End Way.", "km": 6.1, "ele": 133, "html": "<p>The pond at 133 m was the <strong>Horse Pond</strong>: a place to water horses at the top of a long hard climb, and to soak wooden cartwheels so the timber swelled and the iron tyres stayed on. The vestry enlarged and lined it in 1856. Its present name comes from a milestone beside it reading \"IV miles from St Giles, 4\u00bd miles 29 yards from Holborn Bars\".</p> <p>Height made this ridge useful. Between 1808 and 1814 the Heath carried a station in the Admiralty's <strong>shutter telegraph</strong> chain \u2014 the semaphore relay that ran from Whitehall to Great Yarmouth, passing messages by line of sight in minutes rather than a day's ride. The little domed <strong>Hampstead Observatory</strong>, run by the Hampstead Scientific Society, still uses the same asset and is open to the public on clear winter evenings.</p> <p><strong>Jack Straw's Castle</strong>, on the corner, is named for the leader \u2014 with Wat Tyler and John Ball \u2014 of the Peasants' Revolt of 1381. The tradition is that he sheltered here before being taken and beheaded.</p> <p class=\"verdict\">Legend</p> <p>There is no evidence of a building on this site in 1381, and no record of a pub here before the early 1700s. But it was a proper coaching inn once the road mattered. Dickens came repeatedly, and wrote of coming up for \"a red-hot chop for dinner, and a glass of good wine\"; Thackeray and Wilkie Collins drank here; Stoker set a scene here in <em>Dracula</em>; Pinter used it in <em>No Man's Land</em>. It was wrecked by a bomb \u2014 reported in the <em>Daily Herald</em> on 29 March 1941 \u2014 and rebuilt in 1964 to a weatherboarded design by <strong>Raymond Erith</strong>, the classicist who also rebuilt the interior of 10 Downing Street. Betjeman called it \"true Middlesex\" and \"a delight\". It stopped being a pub in 2002 and is now flats and a gym, which is a sad end for the most literary inn on the hill.</p>", "lat": 51.5606, "lon": -0.1783, "detour": true}, {"n": 15, "title": "Judges Walk, Upper Terrace and Constable's ground", "where": "The avenue along the top, before the drop into Hampstead Grove.", "km": 6.2, "ele": 130, "html": "<p>An avenue of limes appearing on London maps from 1745. The name is attached to a story that during the Great Plague of 1665 the courts fled the City and sat in the open air up here, out of the infected air.</p> <p class=\"verdict\">Legend, and probably late</p> <p>No contemporary record supports it, and the walk was more plausibly named for judges who lived nearby or promenaded there. It is nonetheless the sort of story that Hampstead has always liked about itself: the hill as the healthy place, the refuge above the smoke. That belief is the engine of the next stop but one.</p> <p>This is Constable country in a literal sense. <strong>John Constable</strong> took 2 Lower Terrace, just off here, in 1821, and painted this ground repeatedly \u2014 the pond at Branch Hill, the sand excavations, the firs, and above all the sky. He did his oil sketches of cloud formations on this ridge, annotating them on the back with the date, hour, wind direction and weather. It is the closest thing English painting has to a meteorological record.</p>", "lat": 51.55933, "lon": -0.17942, "detour": false}, {"n": 16, "title": "Hampstead Grove: a quarterdeck and the oldest house", "where": "Between Admiral's House and Fenton House. You stopped here for half an hour.", "km": 6.4, "ele": 123, "html": "<p>The street was simply \"The Grove\" when first recorded in 1831; it was renamed Hampstead Grove in 1937 to stop it being confused with The Grove in Highgate.</p> <p><strong>Admiral's House</strong> was built in 1700 by Charles Keys and originally called Golden Spikes \u2014 possibly because it served as a masonic lodge between 1730 and 1745. The naval captain <strong>Fountain North</strong> bought it around 1775, renamed it The Grove, and added the thing you cannot miss: a quarterdeck on the roof, with bulwarks and portholes. No admiral ever lived here. The name is an eighteenth-century error, apparently caused by confusion with Admiral Matthew Barton, another Hampstead resident who fired cannon from his own roof.</p> <p>Constable painted it. <strong>George Gilbert Scott</strong> \u2014 St Pancras station, the Albert Memorial, some 800 buildings \u2014 lived here from 1856 to 1865 and decided Hampstead was too cold for him; his blue plaque went up in 1910. And it is the model for Admiral Boom's house in <em>Mary Poppins</em>: P. L. Travers lived in Hampstead, and the cannon-firing admiral came straight off this roof. The 1964 film shot here. In the adjoining Grove House, John Galsworthy wrote most of <em>The Forsyte Saga</em> between 1918 and 1933.</p> <p>A few doors down is <strong>Fenton House</strong>, built in 1693 and the oldest surviving mansion in Hampstead \u2014 a plain, beautiful merchant's house of warm brick with a walled garden, sunken garden and an orchard of about thirty apple varieties. It was called Ostend House, then Clock House; the present name comes from <strong>Philip Fenton</strong>, a Riga merchant who bought it in 1793. Its last owner, Lady Binning, left it to the National Trust in 1952 along with her porcelain. It also holds the Benton Fletcher collection of early keyboard instruments \u2014 harpsichords, virginals, spinets, clavichords \u2014 which are kept in playing order and are played. If you hear a harpsichord through an open window, that is what it is. Grade I listed.</p> <p>Also on this street: New Grove House, home of the artist and novelist <strong>George du Maurier</strong>, who wrote <em>Trilby</em> and gave the language the word \"Svengali\"; his son Gerald the actor, and thus his granddaughter Daphne, belong to the same house.</p>", "lat": 51.55782, "lon": -0.17932, "detour": false}, {"n": 17, "title": "Flask Walk, Burgh House and Well Walk: the spa that built the village", "where": "Down Holly Hill and Heath Street, across the top of the village, then east along Well Walk to the Heath.", "km": 6.9, "ele": 103, "html": "<p>Hampstead is a hilltop village that became fashionable because of iron in the water, and these three streets are the whole story.</p> <p>The springs here are <strong>chalybeate</strong> \u2014 iron-bearing, faintly rusty, and in the seventeenth century believed to be medicinal. Celia Fiennes compared them to Tunbridge Wells and Bath in 1697. On 20 December 1698 the Earl and Countess of Gainsborough conveyed six acres of spring-bearing land to trustees for the benefit of Hampstead's poor, and the trustees promptly went into business. By 1700 the water was being advertised for sale at Charing Cross and Cheapside.</p> <p>In 1701 John Duffield leased the land at \u00a350 a year and built the apparatus of a spa: a Great Room for assemblies, partitioned to hold a pump room with a basin of the water; a tavern, a chapel, shops, formal gardens and a bowling green. Concerts and dances started in the summer of 1701. Dr John Arbuthnot took the waters in the Long Room in 1734, and Alexander Pope came to see him. The nearby Upper Flask tavern became a summer haunt of the Kit-Cat Club until it broke up around 1720.</p> <p>It did not last. Scandal, unpaid rents and slack trustees killed the trade; in 1725 the Great Room was converted into a chapel, and the spa was effectively finished. The village it had drawn to the hilltop stayed.</p> <ul class=\"names\"> <li><b>Flask Walk</b><span>Named for the flasks the mineral water was bottled in, at the site of the present Flask pub, and sold across London under a seal of a wolf rampant with seven crosslets.</span></li> <li><b>Well Walk</b><span>The spa's promenade. The 1882 memorial fountain marks the well; the original source, about 100 yards uphill, was filled in around 1880 and the new one never ran properly once the sewers went in.</span></li> <li><b>Burgh House</b><span>Built 1704. The spa's physician Dr William Gibbons moved in and enlarged it in 1720 \u2014 his initials are in the wrought-iron gate. Rudyard Kipling's daughter lived here 1933\u201337, and his last outing, in 1936, was to visit her. Now Hampstead Museum. Grade I.</span></li> </ul> <p><strong>John Constable</strong> lived at 40 Well Walk (renumbered from 6) from the summer of 1827 until his death in 1837, and painted London from its windows. His grave is in the churchyard of St John-at-Hampstead on Church Row, five minutes west. In 1774 Roman pottery was dug up in this street, which has led to a long-running and unresolved argument about whether a Roman road ran over the hill.</p>", "lat": 51.55729, "lon": -0.17658, "detour": false}, {"n": 18, "title": "East Heath and the Vale of Health", "where": "Out across the East Heath. The Vale lies in its hollow 400 m to your north-west.", "km": 7.4, "ele": 101, "html": "<p>This open ground was the East Park \u2014 the 60 acres Maryon Wilson held freehold and fought hardest to build on, and where the Viaduct scheme was aimed. On it stands <strong>the Pound</strong>, built in 1787 to impound stray pigs, with a keeper, John Stevenson, to run it. It is the most ordinary structure on the Heath and the one that most directly records what a common was actually for.</p> <p>In the hollow to the north-west is the <strong>Vale of Health</strong>, a hamlet entirely surrounded by heath. It was a boggy patch called Gangmoor, and then, after a harness-maker named Samuel Hatch put up a workshop around 1714, Hatch's or Hatchett's Bottom. In 1777 the Hampstead Water Company enlarged the pond and drained the marsh; cottages for the poor followed in 1779. The name \"Vale of Health\" first appears in 1801 and is, by all appearances, an estate agent's euphemism that worked.</p> <p>What followed was one of the densest literary clusters in London. <strong>Leigh Hunt</strong> lived here from 1815 to 1819, straight out of prison for libelling the Prince Regent, and his cottage became the meeting place for the second generation of Romantics: Byron and Shelley both came, and Keats \u2014 who lived at Wentworth Place, now Keats House on Keats Grove, a mile south-east \u2014 was Hunt's prot\u00e9g\u00e9. Coleridge and George Crabbe were in the Vale between 1825 and 1832. Later came Rabindranath Tagore (1912), D. H. Lawrence (1915), Stella Gibbons (1927\u201330, working on <em>Cold Comfort Farm</em>), and Compton Mackenzie (1937\u201343), who called it \"village life half an hour from Piccadilly Circus\".</p> <div class=\"aside\"> <strong>'Appy 'Ampstead</strong> From the 1860s the Vale had a hotel, tea gardens and a fairground, and the East Heath held bank-holiday fairs on a scale now hard to imagine: 30,000 people on an August Monday in the 1870s, 50,000 on a fine Whit Monday, an estimated 200,000 on Easter Monday 1910. Hampstead Heath station opened in 1860 and brought the East End up by the trainload. In 1892 nine people died in a crush escaping a thunderstorm. </div>", "lat": 51.56038, "lon": -0.17198, "detour": false}, {"n": 19, "title": "The Hampstead Ponds: London's water supply", "where": "The dip in your profile \u2014 crossing the dams of the Hampstead chain.", "km": 7.9, "ele": 77, "html": "<p>These are not natural lakes. They are reservoirs, built in a chain down the valley of the Fleet's western branch, and the dams are the paths you walk on.</p> <p>The springs here were earmarked for London's supply as early as 1543. In 1692 Parliament created the <strong>Hampstead Water Company</strong> to exploit them, and it dammed Hampstead Brook in stages through the eighteenth century \u2014 two ponds by 1703, three by 1745, four by 1810 \u2014 building what are now the Mixed Bathing Pond, Hampstead No. 2 and Hampstead No. 1. A steam pumping engine worked below No. 1 from the 1830s until 1907. In 1856 the New River Company bought the Vale of Health Pond, the Viaduct Pond and Hampstead No. 1 for drinking water, at a time when contemporaries were describing the Vale of Health pond as weed-choked and receiving sewage. Drinking use ended before 1900. There are eighteen ponds on the Heath today.</p> <p>Swimming came in sideways: informal immersion in the early 1800s, formalised at the Mixed Pond by 1884. The <strong>Highgate Men's Pond</strong>, on the other chain, opened on 1 May 1893. The <strong>Kenwood Ladies' Pond</strong> opened in June 1926 and is still the only women-only open-water bathing pond in Europe; it marked its centenary in 2026. In 2005 the High Court settled a long fight with the Corporation by ruling that adults could swim unsupervised at their own risk, which is why the ponds are open all year without lifeguards on the water at dawn.</p> <p>The dams are also, unglamorously, statutory reservoirs above a densely populated valley. The Corporation rebuilt them for safety between 2014 and 2016, to considerable local fury and a generally good result.</p>", "lat": 51.55974, "lon": -0.16544, "detour": false}, {"n": 20, "title": "The Lido, and back to the oak", "where": "Past the Lido and the athletics track, out of the Fields, and east into Oak Village.", "km": 8.7, "ele": 55, "html": "<p><strong>Parliament Hill Lido</strong> opened on 20 August 1938, designed by Harry Rowbotham and T. L. Smithson of the London County Council Parks Department. At \u00a334,000 it was the most expensive of the thirteen lidos the LCC built between 1920 and 1939 \u2014 an unmistakable piece of municipal ambition, dropped at the working-class end of the park where the fairground crowds came off the trains. It was listed Grade II in January 1999 and given a stainless steel lining in 2005, the first outdoor pool in Britain to get one. It is unheated, which regular swimmers regard as the point.</p> <p>Then the Fields' south gate, and Oak Village. Behind you is a landscape that was defended in Parliament seven times, bought twice by public subscription, quarried for sand, dammed for drinking water, painted by Constable, walked by Keats, guarded by the copyholders who wouldn't let their lord enclose it, and finally passed \u2014 after the Metropolitan Board of Works, the LCC and the GLC \u2014 to the City of London Corporation, which has run it since 1989. Sheep came back in 2019 and again in 2023.</p> <p>The oak the whole district is named after is still missing.</p>", "lat": 51.55561, "lon": -0.15796, "detour": false}];
+FEATS=[{"id": "viaduct", "lat": 51.5629, "lon": -0.17006, "stop": 5, "name": "The Viaduct", "blurb": "Maryon Wilson's brick bridge of 1844, thrown across the valley to serve 28 villas that were never finished."}, {"id": "sham-bridge", "lat": 51.56938, "lon": -0.16665, "stop": 6, "name": "The Sham Bridge", "blurb": "A painted wooden screen shaped like a three-arched bridge. Repton wanted it gone and was overruled."}, {"id": "spaniards", "lat": 51.5722, "lon": -0.1779, "stop": 8, "name": "The Spaniards Inn & tollhouse", "blurb": "The inn claims 1585; the tollhouse opposite is of about 1710 and still pinches the road to a single lane."}, {"id": "bull-bush", "lat": 51.568, "lon": -0.1846, "stop": 11, "name": "The Old Bull and Bush", "blurb": "A farmhouse by 1645, licensed for ale in 1721, and the subject of the music-hall song."}, {"id": "old-wyldes", "lat": 51.5697, "lon": -0.1867, "stop": 11, "name": "The Old Wyldes", "blurb": "Eton College's farm from 1449. Linnell lived here and Blake visited; Dickens stayed in 1837."}, {"id": "leg-of-mutton", "lat": 51.5638, "lon": -0.1837, "stop": 12, "name": "Leg of Mutton Pond", "blurb": "Dug about 1816, almost certainly as relief work after the Napoleonic wars."}, {"id": "inverforth", "lat": 51.5617, "lon": -0.1802, "stop": 13, "name": "Inverforth House", "blurb": "Leverhulme's house, The Hill, renamed when Lord Inverforth bought it in 1925."}, {"id": "jack-straws", "lat": 51.5602, "lon": -0.1786, "stop": 14, "name": "Jack Straw's Castle", "blurb": "Named for the 1381 rebel, though no building is recorded here before the 1700s. Rebuilt 1964; now flats."}, {"id": "admirals-house", "lat": 51.5583, "lon": -0.1795, "stop": 16, "name": "Admiral's House", "blurb": "Built 1700. The quarterdeck on the roof is Captain Fountain North's. No admiral ever lived here."}, {"id": "fenton-house", "lat": 51.5578, "lon": -0.1797, "stop": 16, "name": "Fenton House", "blurb": "1693, the oldest surviving mansion in Hampstead. Walled garden, orchard and early keyboards kept in playing order."}, {"id": "burgh-house", "lat": 51.5573, "lon": -0.1763, "stop": 17, "name": "Burgh House", "blurb": "Built 1704; the spa's physician enlarged it in 1720. Now Hampstead Museum."}, {"id": "the-flask", "lat": 51.5566, "lon": -0.1768, "stop": 17, "name": "The Flask, Flask Walk", "blurb": "Where the spa water was bottled, in flasks sealed with a wolf rampant and seven crosslets."}, {"id": "well-walk-40", "lat": 51.5572, "lon": -0.1757, "stop": 17, "name": "40 Well Walk", "blurb": "Constable lived here from 1827 until his death in 1837. The chalybeate fountain of 1882 is a few doors along."}, {"id": "st-john", "lat": 51.5559, "lon": -0.1798, "stop": 17, "name": "St John-at-Hampstead", "blurb": "Constable is buried in the churchyard, five minutes west of Well Walk."}, {"id": "keats-house", "lat": 51.5551, "lon": -0.1685, "stop": 18, "name": "Keats House", "blurb": "Wentworth Place, where Keats wrote the 1819 odes and met Fanny Brawne."}, {"id": "ladies-pond", "lat": 51.56575, "lon": -0.15872, "stop": 19, "name": "Kenwood Ladies' Pond", "blurb": "Opened June 1926 and still the only women-only open-water bathing pond in Europe."}, {"id": "mens-pond", "lat": 51.56298, "lon": -0.15624, "stop": 19, "name": "Highgate Men's Pond", "blurb": "Opened on 1 May 1893, on the Highgate chain."}, {"id": "lido", "lat": 51.5565, "lon": -0.1573, "stop": 20, "name": "Parliament Hill Lido", "blurb": "Opened 20 August 1938, the most expensive of the LCC's thirteen lidos. Unheated."}];
+
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id);};
+var map, meMarker, meCircle, watchId=null, following=false, lastFix=null;
+var stopMarkers={}, featMarkers={}, current=null, mode='stop';
+
+/* ---------- map ---------- */
+map=L.map('map',{zoomControl:true,attributionControl:true}).setView([51.5635,-0.1665],14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19,minZoom:12,crossOrigin:true,
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
+
+L.polyline(ROUTE,{color:'#ffffff',weight:9,opacity:.5,lineJoin:'round'}).addTo(map);
+var line=L.polyline(ROUTE,{color:'#C0451B',weight:5,opacity:.92,lineJoin:'round'}).addTo(map);
+
+/* Fit the route once the flex container actually has a height.
+   Leaflet clamps to maxZoom if it measures a zero-height container. */
+var userMoved=false;
+map.on('dragstart zoomstart',function(){ userMoved=true; });
+function fitRoute(){
+  map.invalidateSize({animate:false});
+  if(map.getSize().y<60) return false;
+  map.fitBounds(line.getBounds(),{padding:[26,26],animate:false});
+  return true;
+}
+function fitWhenReady(tries){
+  if(userMoved) return;
+  if(!fitRoute() && (tries||0)<20){
+    setTimeout(function(){ fitWhenReady((tries||0)+1); },100);
+  }
+}
+if(document.readyState==='complete') requestAnimationFrame(function(){fitWhenReady(0);});
+else window.addEventListener('load',function(){ requestAnimationFrame(function(){fitWhenReady(0);}); });
+requestAnimationFrame(function(){ fitWhenReady(0); });
+/* web fonts landing can change the header height a beat later */
+setTimeout(function(){ if(!userMoved && map.getZoom()>16) fitRoute(); },700);
+
+if(window.ResizeObserver){
+  new ResizeObserver(function(){ map.invalidateSize({animate:false}); })
+    .observe(document.getElementById('map'));
+}else{
+  window.addEventListener('resize',function(){ map.invalidateSize({animate:false}); });
+}
+window.addEventListener('orientationchange',function(){
+  setTimeout(function(){ map.invalidateSize({animate:false}); },260);
+});
+
+function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+STOPS.forEach(function(s){
+  var m=L.marker([s.lat,s.lon],{
+    icon:L.divIcon({className:'',iconSize:[28,28],iconAnchor:[14,14],
+      html:'<div class="pin'+(s.detour?' det':'')+'" data-n="'+s.n+'">'+s.n+'</div>'}),
+    title:s.n+' · '+s.title
+  }).addTo(map);
+  m.bindPopup('<p class="pt">Stop '+s.n+' · '+esc(s.km)+' km</p>'+
+    '<p class="pb">'+esc(s.title)+'</p>'+
+    '<p class="pmore"><button type="button" data-open="stop" data-i="'+s.n+'">Read this stop</button></p>');
+  stopMarkers[s.n]=m;
+});
+FEATS.forEach(function(f){
+  var m=L.marker([f.lat,f.lon],{
+    icon:L.divIcon({className:'',iconSize:[17,17],iconAnchor:[9,9],html:'<div class="dia"></div>'}),
+    title:f.name
+  }).addTo(map);
+  m.bindPopup('<p class="pt">'+esc(f.name)+'</p><p class="pb">'+esc(f.blurb)+'</p>'+
+    '<p class="pmore"><button type="button" data-open="stop" data-i="'+f.stop+'">Read stop '+f.stop+'</button></p>');
+  featMarkers[f.id]=m;
+});
+map.on('popupopen',function(e){
+  var b=e.popup.getElement().querySelector('[data-open]');
+  if(b) b.addEventListener('click',function(){ map.closePopup(); openStop(parseInt(b.dataset.i,10)); });
+});
+
+/* ---------- geolocation ---------- */
+function fmt(m){
+  if(m==null) return '';
+  return m<1000 ? Math.round(m)+' m' : (m/1000).toFixed(m<10000?2:1)+' km';
+}
+function haversine(a,b,c,d){
+  var R=6371000,p=Math.PI/180;
+  var dla=(c-a)*p, dlo=(d-b)*p;
+  var x=Math.sin(dla/2)*Math.sin(dla/2)+Math.cos(a*p)*Math.cos(c*p)*Math.sin(dlo/2)*Math.sin(dlo/2);
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+function bearingWord(a,b,c,d){
+  var p=Math.PI/180,y=Math.sin((d-b)*p)*Math.cos(c*p);
+  var x=Math.cos(a*p)*Math.sin(c*p)-Math.sin(a*p)*Math.cos(c*p)*Math.cos((d-b)*p);
+  var deg=(Math.atan2(y,x)/p+360)%360;
+  return ['N','NE','E','SE','S','SW','W','NW'][Math.round(deg/45)%8];
+}
+function toast(msg,ms){
+  var t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t=setTimeout(function(){t.classList.remove('show');}, ms||3200);
+}
+function nearest(lat,lon){
+  var best=null;
+  STOPS.forEach(function(s){
+    var d=haversine(lat,lon,s.lat,s.lon);
+    if(!best||d<best.d) best={d:d,s:s};
+  });
+  return best;
+}
+function onFix(pos){
+  var la=pos.coords.latitude, lo=pos.coords.longitude, acc=pos.coords.accuracy;
+  lastFix={lat:la,lon:lo,acc:acc};
+  if(!meMarker){
+    meMarker=L.marker([la,lo],{icon:L.divIcon({className:'',iconSize:[20,20],iconAnchor:[10,10],
+      html:'<div class="me"></div>'}),zIndexOffset:1000,interactive:false}).addTo(map);
+    meCircle=L.circle([la,lo],{radius:acc,color:'#1268C3',weight:1,fillColor:'#1268C3',
+      fillOpacity:.13,interactive:false}).addTo(map);
+  }else{
+    meMarker.setLatLng([la,lo]); meCircle.setLatLng([la,lo]); meCircle.setRadius(acc);
+  }
+  var n=nearest(la,lo);
+  $('statusLead').innerHTML='Nearest: <b>'+n.s.n+'</b> '+esc(n.s.title)+' · '+
+      fmt(n.d)+' '+bearingWord(la,lo,n.s.lat,n.s.lon);
+  $('statusAcc').textContent='±'+Math.round(acc)+' m';
+  document.querySelectorAll('.pin.near').forEach(function(el){el.classList.remove('near');});
+  var pe=document.querySelector('.pin[data-n="'+n.s.n+'"]');
+  if(pe && n.d<160) pe.classList.add('near');
+  if(following) map.panTo([la,lo],{animate:true});
+  if(listOpen) renderList();
+}
+function onFixError(err){
+  var msg='Location unavailable';
+  if(err.code===1) msg='Location permission denied — allow it in Settings › Safari';
+  else if(err.code===2) msg='No position fix yet — try again outdoors';
+  else if(err.code===3) msg='Location timed out';
+  $('statusLead').textContent=msg;
+  toast(msg,5000);
+  stopWatch();
+}
+function startWatch(){
+  if(!navigator.geolocation){ toast('This browser has no geolocation',4000); return; }
+  if(!window.isSecureContext){
+    toast('Location needs an https:// address — see the README',6000);
+  }
+  watchId=navigator.geolocation.watchPosition(onFix,onFixError,
+    {enableHighAccuracy:true,maximumAge:4000,timeout:20000});
+  following=true;
+  $('btnLoc').classList.add('on'); $('btnLoc').setAttribute('aria-pressed','true');
+  $('btnLoc').textContent='Tracking';
+  $('statusLead').textContent='Waiting for a fix…';
+}
+function stopWatch(){
+  if(watchId!=null) navigator.geolocation.clearWatch(watchId);
+  watchId=null; following=false;
+  $('btnLoc').classList.remove('on'); $('btnLoc').setAttribute('aria-pressed','false');
+  $('btnLoc').textContent='Locate';
+  $('statusAcc').textContent='';
+  if(meMarker) meMarker.getElement().querySelector('.me').classList.add('stale');
+}
+$('btnLoc').addEventListener('click',function(){
+  if(watchId==null){ startWatch(); }
+  else if(!following && lastFix){ following=true; map.panTo([lastFix.lat,lastFix.lon]); $('btnLoc').classList.add('on'); }
+  else { stopWatch(); }
+});
+map.on('dragstart',function(){
+  if(following){ following=false; $('btnLoc').classList.remove('on'); $('btnLoc').textContent='Recentre'; }
+});
+
+/* ---------- sheet ---------- */
+var listOpen=false;
+function openSheet(){ $('sheet').classList.add('open'); $('sheet').setAttribute('aria-hidden','false');
+  $('scrim').classList.add('open'); }
+function closeSheet(){ $('sheet').classList.remove('open'); $('sheet').setAttribute('aria-hidden','true');
+  $('scrim').classList.remove('open'); listOpen=false; }
+$('sheetClose').addEventListener('click',closeSheet);
+$('scrim').addEventListener('click',closeSheet);
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeSheet(); });
+
+function stopByN(n){ for(var i=0;i<STOPS.length;i++) if(STOPS[i].n===n) return STOPS[i]; return null; }
+
+function openStop(n){
+  var s=stopByN(n); if(!s) return;
+  current=n; mode='stop'; listOpen=false;
+  $('sheetKicker').textContent='Stop '+(n<10?'0':'')+n+' · '+s.km+' km · '+s.ele+' m';
+  $('sheetTitle').textContent=s.title;
+  $('sheetWhere').textContent=s.where;
+  $('sheetWhere').style.display='';
+  $('sheetBody').innerHTML=s.html;
+  $('sheetBody').scrollTop=0;
+  $('sheetNav').style.display='';
+  $('navPrev').disabled=(n<=1); $('navNext').disabled=(n>=20);
+  openSheet();
+}
+$('navPrev').addEventListener('click',function(){ if(current>1) openStop(current-1); });
+$('navNext').addEventListener('click',function(){ if(current<20) openStop(current+1); });
+$('navShow').addEventListener('click',function(){
+  var s=stopByN(current); if(!s) return;
+  closeSheet();
+  map.setView([s.lat,s.lon], Math.max(map.getZoom(),16), {animate:true});
+  setTimeout(function(){ stopMarkers[s.n].openPopup(); },320);
+});
+
+function renderList(){
+  var rows=STOPS.map(function(s){
+    var d=lastFix?haversine(lastFix.lat,lastFix.lon,s.lat,s.lon):null;
+    return {s:s,d:d};
+  });
+  var minD=null;
+  rows.forEach(function(r){ if(r.d!=null&&(minD==null||r.d<minD)) minD=r.d; });
+  $('sheetBody').innerHTML='<div class="list">'+rows.map(function(r){
+    return '<button type="button" data-goto="'+r.s.n+'">'+
+      '<span class="n">'+r.s.n+'</span>'+
+      '<span class="nm">'+esc(r.s.title)+'</span>'+
+      '<span class="d'+(r.d!=null&&r.d===minD?' near':'')+'">'+
+        (r.d!=null?fmt(r.d):r.s.km+' km')+'</span></button>';
+  }).join('')+'</div>';
+  $('sheetBody').querySelectorAll('[data-goto]').forEach(function(b){
+    b.addEventListener('click',function(){ openStop(parseInt(b.dataset.goto,10)); });
+  });
+}
+$('btnList').addEventListener('click',function(){
+  if(listOpen){ closeSheet(); return; }
+  listOpen=true; mode='list';
+  $('sheetKicker').textContent=lastFix?'Sorted by route order · distance from you':'The twenty stops';
+  $('sheetTitle').textContent='Stops';
+  $('sheetWhere').style.display='none';
+  $('sheetNav').style.display='none';
+  renderList();
+  $('sheetBody').scrollTop=0;
+  openSheet();
+});
+
+/* ---------- offline tiles ---------- */
+var BBOX={n:51.5755,s:51.5520,w:-0.1905,e:-0.1470}, ZOOMS=[14,15,16,17];
+function tileList(){
+  var out=[];
+  ZOOMS.forEach(function(z){
+    var n=Math.pow(2,z);
+    function xt(lon){ return Math.floor((lon+180)/360*n); }
+    function yt(lat){ var r=lat*Math.PI/180;
+      return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n); }
+    for(var x=xt(BBOX.w);x<=xt(BBOX.e);x++)
+      for(var y=yt(BBOX.n);y<=yt(BBOX.s);y++)
+        out.push('https://a.tile.openstreetmap.org/'+z+'/'+x+'/'+y+'.png');
+  });
+  return out;
+}
+$('btnSave').addEventListener('click',function(){
+  if(!('caches' in window)){ toast('This browser cannot store the map offline',4000); return; }
+  var urls=tileList(), done=0, fail=0, i=0, btn=$('btnSave');
+  btn.disabled=true;
+  toast('Saving '+urls.length+' map tiles for offline use…',4000);
+  caches.open('heath-tiles-v1').then(function(cache){
+    function next(){
+      if(i>=urls.length){
+        if(--active===0){
+          btn.disabled=false; btn.textContent='Saved';
+          toast('Map saved — '+done+' tiles'+(fail?', '+fail+' failed':'')+'. Works without signal now.',6000);
+        }
+        return;
+      }
+      var u=urls[i++];
+      cache.match(u).then(function(hit){
+        if(hit){ done++; tick(); return next(); }
+        return fetch(u,{mode:'cors'}).then(function(r){
+          if(r.ok) return cache.put(u,r.clone()).then(function(){done++;});
+          fail++;
+        }).catch(function(){ fail++; }).then(function(){ tick(); next(); });
+      });
+    }
+    function tick(){ btn.textContent=Math.round((done+fail)/urls.length*100)+'%'; }
+    var active=4;
+    for(var k=0;k<4;k++) next();
+  });
+});
+
+/* ---------- offline ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+  var refreshing=false;
+  navigator.serviceWorker.addEventListener('controllerchange',function(){
+    if(refreshing) return;
+    refreshing=true;
+    toast('Updated \u2014 reloading',1500);
+    setTimeout(function(){ location.reload(); },900);
+  });
+}
+})();
+</script>
+</body>
+</html>
